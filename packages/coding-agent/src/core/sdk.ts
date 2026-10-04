@@ -343,15 +343,17 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	// Warm only requests for the selected model. Requests a virtual selection routed, or that an
 	// extension redirected, may not be repeated by the next request, so warming them could be wasted.
 	const cacheContextIsCurrent = (requestModel: Model<any>) => {
-		const messages = agent.state.messages;
+		// Projection rebuilds recreate summaries and custom messages. Snapshot values rather than
+		// identities so unchanged rebuilds stay current and in-place content edits invalidate them.
+		const messages = sessionManager.buildSessionProjection().messages.map((message) => JSON.stringify(message));
 		return () => {
 			const currentModel = agent.state.model;
-			const currentMessages = agent.state.messages;
+			const currentMessages = sessionManager.buildSessionProjection().messages;
 			return (
 				currentModel.provider === requestModel.provider &&
 				currentModel.id === requestModel.id &&
 				messages.length <= currentMessages.length &&
-				messages.every((message, index) => currentMessages[index] === message)
+				messages.every((message, index) => JSON.stringify(currentMessages[index]) === message)
 			);
 		};
 	};
@@ -397,9 +399,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			const requestOptions = buildRequestOptions(model, options);
 			// Compaction and summaries use their own routing ids; only session requests
 			// replace the cache entry, so warming restarts from them. Keep warming while
-			// the current transcript still extends the request's prefix. Agent state may
-			// shallow-copy the messages array or refresh the model object without changing
-			// the provider request, so top-level object identity is not a valid cache key.
+			// the canonical transcript still extends the request's prefix. Projection rebuilds
+			// and model object refreshes do not necessarily change the provider request.
 			if (options?.sessionId === sessionManager.getSessionId()) {
 				cacheWarmer.start({ model, context, options: requestOptions }, cacheContextIsCurrent(model));
 			}
