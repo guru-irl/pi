@@ -194,7 +194,12 @@ describe("createAgentSession stream options", () => {
 			fixture.session.agent.state.messages = [...fixture.session.agent.state.messages];
 			fixture.session.agent.state.model = { ...fixture.session.agent.state.model };
 			expect(fixture.session.cacheWarmingStatus?.nextWarmAt).toBeGreaterThan(Date.now());
-			fixture.session.agent.state.messages = fixture.session.agent.state.messages.slice(1);
+			const userEntry = fixture.session.sessionManager
+				.getBranch()
+				.find((entry) => entry.type === "message" && entry.message.role === "user");
+			expect(userEntry).toBeDefined();
+			fixture.session.sessionManager.appendContextEdit(userEntry!.id, null);
+			fixture.session.refreshContext();
 			expect(fixture.session.cacheWarmingStatus?.reason).toBe("conversation context changed");
 		} finally {
 			fixture.dispose();
